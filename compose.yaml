@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # ================= BASE DE DATOS (MySQL) =================
+  mysql-db:
+    image: mysql:8.0
+    container_name: mysql-db
+    environment:
+      MYSQL_ROOT_PASSWORD: pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-ppass"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks: [campuslab-net]
+
+  # ================= MICROSERVICIOS DE DOMINIO =================
+  ms-campuslab-bookings:
+    build: ../../ms-campuslab-bookings
+    container_name: ms-campuslab-bookings
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/bookings_db?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      SPRING_RABBITMQ_HOST: rabbitmq-1
+    ports:
+      - "8081:8080"
+    depends_on:
+      mysql-db: { condition: service_healthy }
+    networks: [campuslab-net]
+
+  ms-campuslab-catalog:
+    build: ../../ms-campuslab-catalog
+    container_name: ms-campuslab-catalog
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/catalog_db?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: pass
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql-db: { condition: service_healthy }
+    networks: [campuslab-net]
+
+  ms-campuslab-notify:
+    build: ../../ms-campuslab-notify
+    container_name: ms-campuslab-notify
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq-1
+    ports:
+      - "8083:8083"
+    networks: [campuslab-net]
+
+  ms-campuslab-report:
+    build: ../../ms-campuslab-report
+    container_name: ms-campuslab-report
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/report_db?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+    ports:
+      - "8084:8084"
+    depends_on:
+      mysql-db: { condition: service_healthy }
+    networks: [campuslab-net]
+
+  ms-campuslab-audit:
+    build: ../../ms-campuslab-audit
+    container_name: ms-campuslab-audit
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/audit_db?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+    ports:
+      - "8085:8085"
+    depends_on:
+      mysql-db: { condition: service_healthy }
+    networks: [campuslab-net]
+
+  # ================= CAPA DE ACCESO Y FRONTEND =================
+  ms-campuslab-bff:
+    build: ../../ms-campuslab-bff
+    container_name: ms-campuslab-bff
+    ports:
+      - "8080:8080"
+    networks: [campuslab-net]
+
+  ngfrontend-campuslab:
+    build: ../../ngfrontend-campuslab
+    container_name: ngfrontend-campuslab
+    ports:
+      - "80:80"
+    networks: [campuslab-net]
+
+volumes:
+  mysql-data:
+
+networks:
+  campuslab-net:
+    external: true
