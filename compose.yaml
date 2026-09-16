@@ -103,15 +103,20 @@ services:
     networks: [campuslab-net]
 
   # ================= CAPA DE ACCESO Y FRONTEND =================
-  ms-campuslab-bff:
-    build: ../ms-campuslab-bff
-    container_name: ms-campuslab-bff
-    ports:
-      - "8080:8080"
-    depends_on:
-      - ms-campuslab-bookings
-      - ms-campuslab-catalog
-    networks: [campuslab-net]
+ms-campuslab-bff:
+  build: ../ms-campuslab-bff
+  container_name: ms-campuslab-bff
+  environment:
+    SERVICES_BOOKINGS_URL: http://ms-campuslab-bookings:8081
+    SERVICES_AUDIT_URL: http://ms-campuslab-audit:8085
+    SERVICES_REPORT_URL: http://ms-campuslab-report:8084
+    SERVICES_CATALOG_URL: http://ms-campuslab-catalog:8082
+  ports:
+    - "8080:8080"
+  depends_on:
+    - ms-campuslab-bookings
+    - ms-campuslab-catalog
+  networks: [campuslab-net]
 
   frontend-campuslab:
     build: ../frontend-campuslab
