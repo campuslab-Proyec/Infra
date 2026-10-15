@@ -6,9 +6,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: pass
-    ports:
-      - "3307:3306"
-      #dads
+    # Sin "ports": solo accesible dentro de campuslab-net
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -22,14 +20,13 @@ services:
   rabbitmq-1:
     image: rabbitmq:3-management
     container_name: rabbitmq-1
-    restart: unless-stopped
     hostname: rabbitmq-1
+    restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:15672:15672"   # UI de gestión, solo accesible desde la propia máquina
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -48,11 +45,11 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_RABBITMQ_HOST: rabbitmq-1
       AUDIT_SERVICE_URL: http://ms-campuslab-audit:8085
-    ports:
-      - "8081:8081"
     depends_on:
-      mysql-db: { condition: service_healthy }
-      rabbitmq-1: { condition: service_healthy }
+      mysql-db:
+        condition: service_healthy
+      rabbitmq-1:
+        condition: service_healthy
     networks: [campuslab-net]
 
   ms-campuslab-catalog:
@@ -63,12 +60,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/catalog_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
-      SPRING_RABBITMQ_HOST: rabbitmq-1
-    ports:
-      - "8082:8082"
     depends_on:
-      mysql-db: { condition: service_healthy }
-      rabbitmq-1: { condition: service_healthy }
+      mysql-db:
+        condition: service_healthy
     networks: [campuslab-net]
 
   ms-campuslab-notify:
@@ -77,24 +71,24 @@ services:
     restart: unless-stopped
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq-1
-    ports:
-      - "8083:8083"
     depends_on:
-      rabbitmq-1: { condition: service_healthy }
+      rabbitmq-1:
+        condition: service_healthy
     networks: [campuslab-net]
 
   ms-campuslab-report:
     build: ../ms-campuslab-report
     container_name: ms-campuslab-report
-    restart: unless-stopped
+    restart: unless-stopped   # reintenta si bookings_db aún no existe
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/bookings_db
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
-    ports:
-      - "8084:8084"
     depends_on:
-      mysql-db: { condition: service_healthy }
+      mysql-db:
+        condition: service_healthy
+      ms-campuslab-bookings:
+        condition: service_started
     networks: [campuslab-net]
 
   ms-campuslab-audit:
@@ -105,47 +99,44 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/audit_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
-    ports:
-      - "8085:8085"
     depends_on:
-      mysql-db: { condition: service_healthy }
+      mysql-db:
+        condition: service_healthy
     networks: [campuslab-net]
 
-# ================= CAPA DE ACCESO Y FRONTEND =================
+  # ================= CAPA DE ACCESO Y FRONTEND =================
   ms-campuslab-bff:
     build: ../ms-campuslab-bff
     container_name: ms-campuslab-bff
     restart: unless-stopped
-    environment:
-      # Relaxed binding: SERVICES_BOOKINGSURL -> services.bookings-url
-      SERVICES_BOOKINGSURL: http://ms-campuslab-bookings:8081
-      SERVICES_AUDITURL: http://ms-campuslab-audit:8085
-      SERVICES_REPORTURL: http://ms-campuslab-report:8084
-      SERVICES_CATALOGURL: http://ms-campuslab-catalog:8082
-      SERVICES_NOTIFYURL: http://ms-campuslab-notify:8083
-    ports:
-      - "8080:8080"
+    # Sin "ports": el navegador llega al BFF solo a través de /api en el nginx del frontend
     depends_on:
-      - ms-campuslab-bookings
-      - ms-campuslab-catalog
-      - ms-campuslab-notify
-      - ms-campuslab-report
-      - ms-campuslab-audit
+      ms-campuslab-bookings:
+        condition: service_started
+      ms-campuslab-catalog:
+        condition: service_started
+      ms-campuslab-report:
+        condition: service_started
+      ms-campuslab-audit:
+        condition: service_started
+      ms-campuslab-notify:
+        condition: service_started
     networks: [campuslab-net]
 
   frontend-campuslab:
-    build: ../ngfrontend-campuslab
+    build: ../frontend-campuslab     # debe coincidir con el nombre real de la carpeta clonada
     container_name: frontend-campuslab
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "80:80"                      # ngrok apunta aquí
     depends_on:
-      - ms-campuslab-bff
+      ms-campuslab-bff:
+        condition: service_started
     networks: [campuslab-net]
-    
+
 volumes:
   mysql-data:
 
 networks:
   campuslab-net:
-    external: true
+    driver: bridge
