@@ -59,10 +59,12 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/catalog_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_RABBITMQ_HOST: rabbitmq-1
     ports:
       - "8082:8082"
     depends_on:
       mysql-db: { condition: service_healthy }
+      rabbitmq-1: { condition: service_healthy }
     networks: [campuslab-net]
 
   ms-campuslab-notify:
@@ -107,19 +109,24 @@ services:
     build: ../ms-campuslab-bff
     container_name: ms-campuslab-bff
     environment:
-      SERVICES_BOOKINGS_URL: http://ms-campuslab-bookings:8081
-      SERVICES_AUDIT_URL: http://ms-campuslab-audit:8085
-      SERVICES_REPORT_URL: http://ms-campuslab-report:8084
-      SERVICES_CATALOG_URL: http://ms-campuslab-catalog:8082
+      # Relaxed binding: SERVICES_BOOKINGSURL -> services.bookings-url
+      SERVICES_BOOKINGSURL: http://ms-campuslab-bookings:8081
+      SERVICES_AUDITURL: http://ms-campuslab-audit:8085
+      SERVICES_REPORTURL: http://ms-campuslab-report:8084
+      SERVICES_CATALOGURL: http://ms-campuslab-catalog:8082
+      SERVICES_NOTIFYURL: http://ms-campuslab-notify:8083
     ports:
       - "8080:8080"
     depends_on:
       - ms-campuslab-bookings
       - ms-campuslab-catalog
+      - ms-campuslab-notify
+      - ms-campuslab-report
+      - ms-campuslab-audit
     networks: [campuslab-net]
 
   frontend-campuslab:
-    build: ../frontend-campuslab
+    build: ../ngfrontend-campuslab
     container_name: frontend-campuslab
     ports:
       - "80:80"
