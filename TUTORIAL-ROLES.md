@@ -2,6 +2,8 @@
 
 CampusLab usa los **roles de aplicación de Microsoft Entra ID** para decidir qué puede hacer cada usuario. Los roles se asignan desde el portal de Azure; no hay que tocar código.
 
+Para todo lo demás del tenant (dar acceso a un compañero, configurar las apps, errores `AADSTS`), ver [GUIA-AZURE-TENANT.md](GUIA-AZURE-TENANT.md).
+
 ## Qué permite cada rol
 
 | Acción | Estudiante / sin rol | Docente | Admin |

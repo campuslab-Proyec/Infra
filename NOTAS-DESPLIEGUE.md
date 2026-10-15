@@ -1,6 +1,6 @@
 # Notas de despliegue de CampusLab
 
-Guía para levantar, actualizar y diagnosticar CampusLab en la EC2. Para gestionar permisos de usuarios, ver [TUTORIAL-ROLES.md](TUTORIAL-ROLES.md).
+Guía para levantar, actualizar y diagnosticar CampusLab en la EC2. Para la configuración de Azure ver [GUIA-AZURE-TENANT.md](GUIA-AZURE-TENANT.md), y para asignar roles ver [TUTORIAL-ROLES.md](TUTORIAL-ROLES.md).
 
 ## Arquitectura
 
