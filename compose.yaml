@@ -124,7 +124,7 @@ services:
     networks: [campuslab-net]
 
   frontend-campuslab:
-    build: ../frontend-campuslab     # debe coincidir con el nombre real de la carpeta clonada
+    build: ${FRONTEND_DIR:-../frontend-campuslab}   # carpeta del frontend; en EC2 se puede cambiar con FRONTEND_DIR en .env
     container_name: frontend-campuslab
     restart: unless-stopped
     ports:
