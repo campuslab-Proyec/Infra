@@ -114,6 +114,9 @@ services:
     build: ../ms-campuslab-bff
     container_name: ms-campuslab-bff
     restart: unless-stopped
+    environment:
+      # Usuarios sin App Role cuyo correo es de estos dominios entran como Docente (separados por comas; vacío = desactivado)
+      CAMPUSLAB_SECURITY_DOCENTE_DOMAINS: duocuc.cl
     # Sin "ports": el navegador llega al BFF solo a través de /api en el nginx del frontend
     depends_on:
       ms-campuslab-bookings:

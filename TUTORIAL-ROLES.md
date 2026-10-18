@@ -14,7 +14,29 @@ Para todo lo demás del tenant (dar acceso a un compañero, configurar las apps,
 | Cambiar el estado de una reserva | ❌ | ✅ | ✅ |
 | Ver Auditoría y Reportes | ❌ | ❌ | ✅ |
 
-Un usuario sin rol asignado puede entrar y queda con los mismos permisos que un Estudiante.
+Un usuario sin rol asignado puede entrar y queda con los mismos permisos que un Estudiante, **salvo que su correo sea de un dominio de docentes** (ver la sección siguiente).
+
+## Rol Docente automático por dominio de correo
+
+Para no asignar el rol uno por uno (y sin necesitar licencia P1 para usar grupos), el BFF trata como **Docente** a cualquier usuario que:
+
+1. **no** traiga ningún rol asignado en Entra ID, y
+2. tenga un correo de uno de los dominios configurados (por defecto `duocuc.cl`).
+
+Si el usuario tiene un rol asignado en Entra ID (por ejemplo Admin o Estudiante), siempre manda ese rol.
+
+Los dominios se configuran en `Infra/compose.yaml`, en el servicio `ms-campuslab-bff`:
+
+```yaml
+environment:
+  CAMPUSLAB_SECURITY_DOCENTE_DOMAINS: duocuc.cl            # varios: duocuc.cl,profesor.duoc.cl
+```
+
+Después de cambiarlo: `docker compose up -d ms-campuslab-bff`. Si se deja vacío, la regla queda desactivada.
+
+> ⚠️ En Duoc UC los **estudiantes también tienen correo `@duocuc.cl`**. Con el valor por defecto, cualquier estudiante de Duoc invitado al directorio entraría como Docente (podría aprobar y cancelar reservas). Si los docentes usan otro dominio (por ejemplo `@profesor.duoc.cl`), configura solo ese. Para un estudiante puntual, asígnale el rol **Estudiante** en Entra ID: un rol asignado tiene prioridad sobre la regla.
+
+La lógica está en `ms-campuslab-bff`, clase `RoleResolver`. El usuario igual tiene que existir en el directorio appclientM (creado o invitado) para poder iniciar sesión.
 
 ## Antes de empezar
 
