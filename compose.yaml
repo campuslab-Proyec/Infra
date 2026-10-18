@@ -74,6 +74,8 @@ services:
     restart: unless-stopped
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq-1
+      # API de management (listado de colas/exchanges/bindings en el panel de administración)
+      CAMPUSLAB_RABBITMQ_MANAGEMENT_URL: http://rabbitmq-1:15672
     depends_on:
       rabbitmq-1:
         condition: service_healthy
