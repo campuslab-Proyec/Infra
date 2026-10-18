@@ -60,8 +60,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/catalog_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_RABBITMQ_HOST: rabbitmq-1
     depends_on:
       mysql-db:
+        condition: service_healthy
+      rabbitmq-1:
         condition: service_healthy
     networks: [campuslab-net]
 
