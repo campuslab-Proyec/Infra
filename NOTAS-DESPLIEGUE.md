@@ -33,23 +33,18 @@ Cada servicio es un repositorio propio en <https://github.com/campuslab-Proyec>.
 | ms-campuslab-catalog | `ms-campuslab-catalog` |
 | ms-campuslab-notify | `ms-campuslab-notify` |
 | ms-campuslab-report | `ms-campuslab-report` |
-| frontend-campuslab | **`ngfrontend-campuslab`** ⚠️ |
+| frontend-campuslab | `frontend-campuslab` |
 
-⚠️ El repositorio del frontend se llama `frontend-campuslab`, pero la carpeta tiene que llamarse `ngfrontend-campuslab`:
-
-```bash
-git clone https://github.com/campuslab-Proyec/frontend-campuslab.git ngfrontend-campuslab
-```
+El compose busca el frontend en `../frontend-campuslab` por defecto. Si alguna vez se clona con otro nombre, se indica en `Infra/.env` con `FRONTEND_DIR=../otro-nombre`.
 
 ## Instalación desde cero en una EC2
 
 ```bash
 ORG=https://github.com/campuslab-Proyec
 cd ~
-for r in Infra ms-campuslab-audit ms-campuslab-bff ms-campuslab-bookings ms-campuslab-catalog ms-campuslab-notify ms-campuslab-report; do
+for r in Infra ms-campuslab-audit ms-campuslab-bff ms-campuslab-bookings ms-campuslab-catalog ms-campuslab-notify ms-campuslab-report frontend-campuslab; do
   git clone $ORG/$r.git
 done
-git clone $ORG/frontend-campuslab.git ngfrontend-campuslab
 
 sudo systemctl enable --now docker
 docker network create campuslab-net
@@ -65,14 +60,25 @@ Después, configura ngrok como servicio (sección **ngrok**).
 
 ```bash
 cd ~
-for d in Infra ms-campuslab-* ngfrontend-campuslab; do
+# 1. Liberar espacio: el disco es de 8 GB y cada build deja ~1,5 GB de caché e imágenes viejas
+docker builder prune -af
+docker image prune -f
+df -h /                      # conviene tener al menos 2 GB libres antes de construir
+
+# 2. Traer lo último de GitHub
+for d in Infra ms-campuslab-* frontend-campuslab; do
   echo "== $d"; git -C $d fetch origin && git -C $d reset --hard origin/main
 done
+
+# 3. Reconstruir y levantar
 cd ~/Infra
 docker compose up -d --build
 ```
 
-`reset --hard` descarta cualquier cambio hecho a mano en la EC2; la fuente de verdad es GitHub.
+- Ejecuta los comandos **de a uno o copiando el bloque completo**: si se pegan dos veces seguidos en la misma línea (por ejemplo `...prune -fdocker builder...`), Docker responde `unknown shorthand flag`.
+- `reset --hard` descarta cualquier cambio hecho a mano en la EC2; la fuente de verdad es GitHub. Si no estás seguro de lo que hay, respáldalo antes: `git -C <carpeta> diff > ~/respaldo-<carpeta>.patch`.
+- Después de limpiar la caché, el primer build vuelve a descargar las dependencias de Maven y npm, así que tarda más.
+- Mientras se reconstruye, la página puede responder 502 durante unos minutos.
 
 ## Al reiniciar el laboratorio de AWS
 
@@ -146,10 +152,13 @@ curl -I http://localhost                          # nginx debe responder 200
 | **502** en llamadas a `/api/...` | El BFF está caído o todavía arrancando | `docker compose logs ms-campuslab-bff --tail 50` |
 | **401** en todas las llamadas | El token no es de este tenant o de esta API | Iniciar sesión con una cuenta del directorio appclientM |
 | **403** en una acción | El usuario no tiene el rol necesario | Ver [TUTORIAL-ROLES.md](TUTORIAL-ROLES.md) |
+| **AADSTS50011** "The redirect URI ... does not match" | La URL desde la que se abre la app no está registrada como SPA en frontend-campuslab | Registrar la URI exacta, con `/` final (ver [GUIA-AZURE-TENANT.md](GUIA-AZURE-TENANT.md), 7.1) |
+| **AADB2C90091** "El usuario ha cancelado..." | Se presionó Cancelar o Atrás en una pantalla de Microsoft (cambio de contraseña, MFA) | Volver a iniciar sesión y completar todos los pasos |
 | **AADSTS650052** al iniciar sesión | La cuenta es de otra organización, o se está sirviendo una versión vieja del frontend | Invitar la cuenta al directorio; verificar la versión (fila siguiente) |
 | La app no refleja los últimos cambios | Se está sirviendo un build viejo | En F12 → Network, revisar el nombre de `main-*.js`; reconstruir con `docker compose up -d --build` |
 | `network campuslab-net ... could not be found` | Falta la red de Docker | `docker network create campuslab-net` |
 | El build se corta o la instancia se congela | Falta de memoria al compilar todo en paralelo | `docker compose build --parallel 1` |
+| El build falla con `no space left on device` | Disco lleno por caché de builds e imágenes viejas | `docker builder prune -af && docker image prune -f`, revisar con `df -h /` |
 
 ## Correrlo en un PC (Windows con Docker Desktop)
 
@@ -163,5 +172,5 @@ Después se abre <http://localhost>. La URI `http://localhost/` tiene que estar 
 
 ## Pendientes conocidos
 
-- **catalog y notify no validan JWT.** Solo los protege el BFF, y sus puertos (8082 y 8083) están publicados en el compose. Conviene no abrir esos puertos en el Security Group de la EC2.
+- **catalog y notify no validan JWT.** Solo los protege el BFF. Sus puertos no se publican en el compose, así que solo son accesibles dentro de la red de Docker; la API de administración de RabbitMQ de notify (`/api/admin/**`) llega al navegador únicamente a través del BFF, que exige el rol Admin.
 - **Security Group:** con ngrok basta con abrir el puerto **22** (SSH). Los puertos 3307, 5672, 15672 y 8080–8085 no deberían estar abiertos a internet.
