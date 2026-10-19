@@ -40,8 +40,9 @@ services:
     container_name: ms-campuslab-bookings
     restart: unless-stopped
     environment:
-      # Solo IPv4: la red de Docker no tiene IPv6 y Java fallaba al bajar las claves de Entra ID (401)
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
+      # Solo IPv4: la red de Docker no tiene IPv6 y Java fallaba al bajar las claves de Entra ID (401).
+      # Hora de Chile: el frontend envía fechas locales sin zona; en UTC "@Future" las rechazaba (400)
+      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/bookings_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
@@ -59,7 +60,7 @@ services:
     container_name: ms-campuslab-catalog
     restart: unless-stopped
     environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
+      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/catalog_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
@@ -76,7 +77,7 @@ services:
     container_name: ms-campuslab-notify
     restart: unless-stopped
     environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
+      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       SPRING_RABBITMQ_HOST: rabbitmq-1
       # API de management (listado de colas/exchanges/bindings en el panel de administración)
       CAMPUSLAB_RABBITMQ_MANAGEMENT_URL: http://rabbitmq-1:15672
@@ -90,7 +91,7 @@ services:
     container_name: ms-campuslab-report
     restart: unless-stopped   # reintenta si bookings_db aún no existe
     environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
+      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/bookings_db
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
@@ -106,7 +107,7 @@ services:
     container_name: ms-campuslab-audit
     restart: unless-stopped
     environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
+      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/audit_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
@@ -121,7 +122,7 @@ services:
     container_name: ms-campuslab-bff
     restart: unless-stopped
     environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
+      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       # Usuarios sin App Role cuyo correo es de estos dominios entran como Docente (separados por comas; vacío = desactivado)
       CAMPUSLAB_SECURITY_DOCENTE_DOMAINS: duocuc.cl
     # Sin "ports": el navegador llega al BFF solo a través de /api en el nginx del frontend
