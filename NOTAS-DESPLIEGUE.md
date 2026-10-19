@@ -1,23 +1,27 @@
 # Notas de despliegue de CampusLab
 
-Guía para levantar, actualizar y diagnosticar CampusLab en la EC2. Para la configuración de Azure ver [GUIA-AZURE-TENANT.md](GUIA-AZURE-TENANT.md), y para asignar roles ver [TUTORIAL-ROLES.md](TUTORIAL-ROLES.md).
+Guía para levantar, actualizar y diagnosticar CampusLab en la EC2. Para la configuración de Azure ver [GUIA-AZURE-TENANT.md](GUIA-AZURE-TENANT.md), para asignar roles ver [TUTORIAL-ROLES.md](TUTORIAL-ROLES.md) y para el API Gateway de AWS ver [GUIA-API-GATEWAY.md](GUIA-API-GATEWAY.md).
 
 ## Arquitectura
 
 ```
 Navegador ──HTTPS──> ngrok ──> EC2:80 nginx (frontend Angular)
-                                   │  /api/*
+    │                              │  /api/*  (modo directo)
+    └─> API Gateway (authorizer JWT) ┘  (si API_BASE_URL apunta al gateway)
                                    v
                               BFF :8080 ──> bookings :8081 ──> audit :8085
                                         ├─> catalog  :8082
                                         ├─> notify   :8083
                                         ├─> report   :8084
                                         └─> audit    :8085
-           MySQL :3306 (bookings_db, catalog_db, audit_db)   RabbitMQ :5672
+           MySQL :3306 (bookings_db, catalog_db, audit_db)
+           RabbitMQ: clúster de 2 nodos (rabbitmq-1, rabbitmq-2) :5672
 ```
 
 - El login es con Microsoft Entra ID. El frontend obtiene un token para la API del BFF y el BFF lo reenvía a los microservicios.
-- Los eventos de reservas viajan por RabbitMQ: bookings publica y notify consume.
+- Los eventos de reservas viajan por RabbitMQ: bookings publica en el topic exchange `booking.events` (routing key `booking.<estado>`) y notify consume con el binding `booking.*`.
+- RabbitMQ corre como **clúster de 2 nodos**; los microservicios se conectan a ambos (`SPRING_RABBITMQ_ADDRESSES`). Verificar con `docker exec rabbitmq-2 rabbitmqctl cluster_status` o en la UI (Overview, sección *Nodes*).
+- **Configuración propia de cada máquina en `Infra/.env`** (no se sube a GitHub, ver `.env.example`): `API_BASE_URL` define si el frontend llama al BFF directo o por el API Gateway.
 - Report lee directamente la tabla `bookings` de `bookings_db`.
 
 ## Repositorios

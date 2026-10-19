@@ -1,0 +1,2 @@
+# Configuración propia de cada máquina (URL del API Gateway, carpeta del frontend...)
+.env
