@@ -1,0 +1,3 @@
+# Archivos que leen contenedores Linux: siempre con fin de línea LF (también en clones de Windows)
+rabbitmq/*.conf text eol=lf
+*.sh text eol=lf
