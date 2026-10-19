@@ -151,6 +151,8 @@ curl -I http://localhost                          # nginx debe responder 200
 | ngrok muestra **502 Bad Gateway** en la página principal | El contenedor `frontend-campuslab` no está corriendo, o ngrok apunta a otra máquina | `docker compose ps -a` y revisar el log del frontend; revisar **Agents** en el dashboard de ngrok |
 | **502** en llamadas a `/api/...` | El BFF está caído o todavía arrancando | `docker compose logs ms-campuslab-bff --tail 50` |
 | **401** en todas las llamadas | El token no es de este tenant o de esta API | Iniciar sesión con una cuenta del directorio appclientM |
+| **401** en todas las llamadas y en el log del BFF aparece `Network unreachable` | El contenedor no puede bajar las claves de Entra ID por IPv6 | Verificar que el compose tenga `JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true` |
+| **400** al crear una reserva de noche | Contenedores en UTC (la fecha local parece pasada) | Verificar `-Duser.timezone=America/Santiago` en `JAVA_TOOL_OPTIONS` |
 | **403** en una acción | El usuario no tiene el rol necesario | Ver [TUTORIAL-ROLES.md](TUTORIAL-ROLES.md) |
 | **AADSTS50011** "The redirect URI ... does not match" | La URL desde la que se abre la app no está registrada como SPA en frontend-campuslab | Registrar la URI exacta, con `/` final (ver [GUIA-AZURE-TENANT.md](GUIA-AZURE-TENANT.md), 7.1) |
 | **AADB2C90091** "El usuario ha cancelado..." | Se presionó Cancelar o Atrás en una pantalla de Microsoft (cambio de contraseña, MFA) | Volver a iniciar sesión y completar todos los pasos |
@@ -172,5 +174,5 @@ Después se abre <http://localhost>. La URI `http://localhost/` tiene que estar 
 
 ## Pendientes conocidos
 
-- **catalog y notify no validan JWT.** Solo los protege el BFF. Sus puertos no se publican en el compose, así que solo son accesibles dentro de la red de Docker; la API de administración de RabbitMQ de notify (`/api/admin/**`) llega al navegador únicamente a través del BFF, que exige el rol Admin.
+- **Todos los microservicios validan el JWT de Entra ID** (firma, emisor y audiencia). El BFF reenvía el token del usuario a cada uno y aplica los permisos por rol.
 - **Security Group:** con ngrok basta con abrir el puerto **22** (SSH). Los puertos 3307, 5672, 15672 y 8080–8085 no deberían estar abiertos a internet.
