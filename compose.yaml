@@ -1,12 +1,14 @@
+version: '3.8'
+
 services:
   # ================= BASE DE DATOS (MySQL) =================
   mysql-db:
     image: mysql:8.0
     container_name: mysql-db
-    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: pass
-    # Sin "ports": solo accesible dentro de campuslab-net
+    ports:
+      - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -14,179 +16,306 @@ services:
       interval: 10s
       timeout: 5s
       retries: 15
-    networks: [campuslab-net]
+    networks:
+      - campuslab-net
 
-  # ================= MENSAJERÍA (RabbitMQ, clúster de 2 nodos) =================
-  # Ambos nodos comparten la Erlang cookie y rabbitmq/cluster.conf (peer discovery "classic config"),
-  # así forman el clúster solos al arrancar. Verificar: docker exec rabbitmq-2 rabbitmqctl cluster_status
+  # ================= MENSAJERÍA (RabbitMQ) =================
   rabbitmq-1:
     image: rabbitmq:3-management
     container_name: rabbitmq-1
     hostname: rabbitmq-1
-    restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
-      RABBITMQ_ERLANG_COOKIE: campuslab-rabbitmq-cluster-cookie
-    volumes:
-      - ./rabbitmq/cluster.conf:/etc/rabbitmq/conf.d/20-cluster.conf:ro
     ports:
-      - "127.0.0.1:15672:15672"   # UI de gestión, solo accesible desde la propia máquina
+      - "5672:5672"
+      - "15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
-    networks: [campuslab-net]
+    networks:
+      - campuslab-net
 
-  rabbitmq-2:
-    image: rabbitmq:3-management
-    container_name: rabbitmq-2
-    hostname: rabbitmq-2
+  # ================= CLÚSTER ZOOKEEPER =================
+  zookeeper-1:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper-1
+    hostname: zookeeper-1
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-      RABBITMQ_ERLANG_COOKIE: campuslab-rabbitmq-cluster-cookie
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
     volumes:
-      - ./rabbitmq/cluster.conf:/etc/rabbitmq/conf.d/20-cluster.conf:ro
-    ports:
-      - "127.0.0.1:15673:15672"   # UI del segundo nodo
+      - zk1-data:/var/lib/zookeeper/data
+      - zk1-log:/var/lib/zookeeper/log
+    networks:
+      - campuslab-net
+
+  zookeeper-2:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper-2
+    hostname: zookeeper-2
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+    volumes:
+      - zk2-data:/var/lib/zookeeper/data
+      - zk2-log:/var/lib/zookeeper/log
+    networks:
+      - campuslab-net
+
+  zookeeper-3:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper-3
+    hostname: zookeeper-3
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_SERVER_ID: 3
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+    volumes:
+      - zk3-data:/var/lib/zookeeper/data
+      - zk3-log:/var/lib/zookeeper/log
+    networks:
+      - campuslab-net
+
+  # ================= CLÚSTER KAFKA =================
+  kafka-1:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-1
+    hostname: kafka-1
+    restart: unless-stopped
     depends_on:
-      rabbitmq-1:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks: [campuslab-net]
+      - zookeeper-1
+      - zookeeper-2
+      - zookeeper-3
+    ports:
+      - "127.0.0.1:9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-1:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - kafka1-data:/var/lib/kafka/data
+    networks:
+      - campuslab-net
+
+  kafka-2:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-2
+    hostname: kafka-2
+    restart: unless-stopped
+    depends_on:
+      - zookeeper-1
+      - zookeeper-2
+      - zookeeper-3
+    ports:
+      - "127.0.0.1:9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-2:29092,EXTERNAL://localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - kafka2-data:/var/lib/kafka/data
+    networks:
+      - campuslab-net
+
+  kafka-3:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-3
+    hostname: kafka-3
+    restart: unless-stopped
+    depends_on:
+      - zookeeper-1
+      - zookeeper-2
+      - zookeeper-3
+    ports:
+      - "127.0.0.1:9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-3:29092,EXTERNAL://localhost:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - kafka3-data:/var/lib/kafka/data
+    networks:
+      - campuslab-net
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka-1
+      - kafka-2
+      - kafka-3
+    ports:
+      - "127.0.0.1:8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: campuslab
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper-1:2181
+      JAVA_OPTS: "-Xms128m -Xmx384m"
+    networks:
+      - campuslab-net
 
   # ================= MICROSERVICIOS DE DOMINIO =================
   ms-campuslab-bookings:
     build: ../ms-campuslab-bookings
     container_name: ms-campuslab-bookings
-    restart: unless-stopped
     environment:
-      # Solo IPv4: la red de Docker no tiene IPv6 y Java fallaba al bajar las claves de Entra ID (401).
-      # Hora de Chile: el frontend envía fechas locales sin zona; en UTC "@Future" las rechazaba (400)
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/bookings_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
-      # Los dos nodos del clúster: si uno cae, el cliente se reconecta al otro
-      SPRING_RABBITMQ_ADDRESSES: rabbitmq-1:5672,rabbitmq-2:5672
+      SPRING_RABBITMQ_HOST: rabbitmq-1
       AUDIT_SERVICE_URL: http://ms-campuslab-audit:8085
+    ports:
+      - "8081:8081"
     depends_on:
       mysql-db:
         condition: service_healthy
       rabbitmq-1:
         condition: service_healthy
-    networks: [campuslab-net]
+    networks:
+      - campuslab-net
 
   ms-campuslab-catalog:
     build: ../ms-campuslab-catalog
     container_name: ms-campuslab-catalog
-    restart: unless-stopped
     environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/catalog_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
-      # Los dos nodos del clúster: si uno cae, el cliente se reconecta al otro
-      SPRING_RABBITMQ_ADDRESSES: rabbitmq-1:5672,rabbitmq-2:5672
+    ports:
+      - "8082:8082"
     depends_on:
       mysql-db:
         condition: service_healthy
-      rabbitmq-1:
-        condition: service_healthy
-    networks: [campuslab-net]
+    networks:
+      - campuslab-net
 
   ms-campuslab-notify:
     build: ../ms-campuslab-notify
     container_name: ms-campuslab-notify
-    restart: unless-stopped
     environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
-      # Los dos nodos del clúster: si uno cae, el cliente se reconecta al otro
-      SPRING_RABBITMQ_ADDRESSES: rabbitmq-1:5672,rabbitmq-2:5672
-      # API de management (listado de colas/exchanges/bindings en el panel de administración)
-      CAMPUSLAB_RABBITMQ_MANAGEMENT_URL: http://rabbitmq-1:15672
+      SPRING_RABBITMQ_HOST: rabbitmq-1
+    ports:
+      - "8083:8083"
     depends_on:
       rabbitmq-1:
         condition: service_healthy
-    networks: [campuslab-net]
+    networks:
+      - campuslab-net
 
   ms-campuslab-report:
     build: ../ms-campuslab-report
     container_name: ms-campuslab-report
-    restart: unless-stopped   # reintenta si bookings_db aún no existe
     environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/bookings_db
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
+    ports:
+      - "8084:8084"
     depends_on:
       mysql-db:
         condition: service_healthy
-      ms-campuslab-bookings:
-        condition: service_started
-    networks: [campuslab-net]
+    networks:
+      - campuslab-net
 
   ms-campuslab-audit:
     build: ../ms-campuslab-audit
     container_name: ms-campuslab-audit
-    restart: unless-stopped
     environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/audit_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
+    ports:
+      - "8085:8085"
     depends_on:
       mysql-db:
         condition: service_healthy
-    networks: [campuslab-net]
+    networks:
+      - campuslab-net
 
   # ================= CAPA DE ACCESO Y FRONTEND =================
   ms-campuslab-bff:
     build: ../ms-campuslab-bff
     container_name: ms-campuslab-bff
-    restart: unless-stopped
-    environment:
-      JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true -Duser.timezone=America/Santiago
-      # Usuarios sin App Role cuyo correo es de estos dominios entran como Docente (separados por comas; vacío = desactivado)
-      CAMPUSLAB_SECURITY_DOCENTE_DOMAINS: duocuc.cl
-    # Sin "ports": el navegador llega al BFF solo a través de /api en el nginx del frontend
-    depends_on:
-      ms-campuslab-bookings:
-        condition: service_started
-      ms-campuslab-catalog:
-        condition: service_started
-      ms-campuslab-report:
-        condition: service_started
-      ms-campuslab-audit:
-        condition: service_started
-      ms-campuslab-notify:
-        condition: service_started
-    networks: [campuslab-net]
-
-  frontend-campuslab:
-    build: ${FRONTEND_DIR:-../frontend-campuslab}   # carpeta del frontend; en EC2 se puede cambiar con FRONTEND_DIR en .env
-    container_name: frontend-campuslab
-    restart: unless-stopped
-    environment:
-      # URL del API Gateway de AWS (p. ej. https://abc123.execute-api.us-east-1.amazonaws.com).
-      # Vacía = el frontend llama al BFF por su mismo origen. Se define en Infra/.env (no versionado).
-      API_BASE_URL: ${API_BASE_URL:-}
     ports:
-      - "80:80"                      # ngrok apunta aquí
+      - "8080:8080"
     depends_on:
-      ms-campuslab-bff:
-        condition: service_started
-    networks: [campuslab-net]
+      - ms-campuslab-bookings
+      - ms-campuslab-catalog
+    networks:
+      - campuslab-net
+
+  ngfrontend-campuslab:
+    build: ../ngfrontend-campuslab
+    container_name: ngfrontend-campuslab
+    ports:
+      - "80:80"
+    depends_on:
+      - ms-campuslab-bff
+    networks:
+      - campuslab-net
 
 volumes:
   mysql-data:
+  zk1-data:
+  zk1-log:
+  zk2-data:
+  zk2-log:
+  zk3-data:
+  zk3-log:
+  kafka1-data:
+  kafka2-data:
+  kafka3-data:
 
 networks:
   campuslab-net:
