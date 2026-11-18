@@ -210,6 +210,7 @@ services:
     build: ../ms-campuslab-bookings
     container_name: ms-campuslab-bookings
     environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/bookings_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
@@ -229,6 +230,7 @@ services:
     build: ../ms-campuslab-catalog
     container_name: ms-campuslab-catalog
     environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/catalog_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
@@ -244,6 +246,7 @@ services:
     build: ../ms-campuslab-notify
     container_name: ms-campuslab-notify
     environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
       SPRING_RABBITMQ_HOST: rabbitmq-1
     ports:
       - "8083:8083"
@@ -257,6 +260,7 @@ services:
     build: ../ms-campuslab-report
     container_name: ms-campuslab-report
     environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/bookings_db
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
@@ -272,6 +276,7 @@ services:
     build: ../ms-campuslab-audit
     container_name: ms-campuslab-audit
     environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/audit_db?createDatabaseIfNotExist=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: pass
